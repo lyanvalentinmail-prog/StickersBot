@@ -4,7 +4,7 @@ export default {
   prefijo: '.',
 
   botNombre: 'Sticker Bot',
-  botVersion: '2.0.0',
+  botVersion: '3.0.0',
 
   // Texto que se inyecta en el sticker (se ve al abrirlo en WhatsApp)
   packname: 'Made by',
@@ -27,9 +27,10 @@ export default {
     duracion: 1,   // 1 fotograma
   },
 
-  // Audio (nota de voz que acompaña al sticker)
+  // Audio que va DENTRO del sticker (sound stickers de WhatsApp)
   audio: {
-    duracionMax: 15, // segundos
+    duracionSticker: 5,  // WhatsApp guarda hasta 5 s del audio del video
+    duracionMax: 10,     // límite duro de WhatsApp
     bitrate: '48k',
   },
 

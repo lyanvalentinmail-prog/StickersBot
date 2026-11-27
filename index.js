@@ -6,11 +6,16 @@ import qrcode from 'qrcode-terminal';
 import fs from 'fs';
 import readline from 'readline/promises';
 import config from './config.js';
+import { asegurarProto } from './proto/aplicar-proto.js';
 import { checkFfmpeg } from './lib/sticker.js';
 import { s2 } from './commands/s2.js';
 
 const SESSION = './session';
 const P = config.prefijo;
+
+// Activa el soporte de stickers con audio (parchea el proto de Baileys).
+// Debe ejecutarse ANTES de importar nada que use el proto en caliente.
+const proto = asegurarProto();
 
 if (!fs.existsSync(SESSION)) fs.mkdirSync(SESSION, { recursive: true });
 
@@ -181,6 +186,13 @@ async function main() {
   console.log(chalk.cyanBright.bold('══════════════════════════════════'));
   console.log(chalk.magentaBright.bold(`   ${config.botNombre} v${config.botVersion}`));
   console.log(chalk.cyanBright.bold('══════════════════════════════════\n'));
+
+  if (proto.ok) {
+    console.log(chalk.gray('🔊 Stickers con audio: activados'));
+  } else {
+    console.log(chalk.yellow(`⚠️  Stickers con audio no disponibles (${proto.motivo || 'proto sin parchear'})`));
+    console.log(chalk.gray('   Se enviará el sticker y el audio por separado.'));
+  }
 
   if (!(await checkFfmpeg())) {
     console.log(chalk.yellow('⚠️  ffmpeg no encontrado.'));
