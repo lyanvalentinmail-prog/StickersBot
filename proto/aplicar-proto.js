@@ -261,70 +261,56 @@ export function restaurarProto() {
 //
 // Si el bot ya cargó `@whiskeysockets/baileys`, parchear WAProto/index.js en
 // disco NO surte efecto: el módulo está en caché y su `Message.encode` sigue
-// siendo el original. Como los sitios donde se codifica el mensaje final
-// (`getMessageType` / estanza) solo leen `message.stickerMessage` y las
-// propiedades desconocidas se ignoran, basta con:
-//
-//   · añadir los prototipos para que `fromObject`/`toObject` conserven los campos
-//   · envolver `Message.encode` para escribir el campo 134 en los mensajes
-//     marcados
-
-export const MARCA_SOUND_STICKER = Symbol.for('stickersbot.soundsticker');
+// siendo el original. Aquí añadimos `audioMessage` a StickerMessage en el proto
+// ya cargado para que fromObject/toObject/encode/decode lo conserven.
 
 let encodeInstalado = false;
 
-/**
- * Envuelve en memoria `Message.encode` para que los mensajes marcados con
- * MARCA_SOUND_STICKER se serialicen como el sound sticker real:
- *
- *   Message.134 (FutureProofMessage) → Message.1 → stickerMessage(.26 audio)
- */
+/** Añade el campo `audioMessage` a la clase StickerMessage cargada en memoria */
 export function instalarEncodeEnMemoria(proto) {
   if (encodeInstalado) return true;
-  if (!proto?.Message?.encode) return false;
+  const SM = proto?.Message?.StickerMessage;
+  if (!SM || typeof SM.encode !== 'function') return false;
 
-  // Propiedades que necesita el envoltorio (desconocidas para el proto original)
-  for (const nombre of ['audioStickerMessage']) {
-    if (!(nombre in proto.Message.prototype)) proto.Message.prototype[nombre] = null;
-    if (!(nombre in proto.Message.prototype)) return false;
-    if (!(`_${nombre}` in proto.Message.prototype)) proto.Message.prototype[`_${nombre}`] = null;
-  }
-  for (const nombre of ['audioMessage', 'streamingSidecar']) {
-    if (!(nombre in proto.Message.prototype)) proto.Message.prototype[nombre] = null;
-    if (!(nombre in proto.Message.prototype)) return false;
-    if (!(`_${nombre}` in proto.Message.prototype)) proto.Message.prototype[`_${nombre}`] = null;
-  }
+  // 1. Campo en el prototipo (fromObject/toObject lo necesitan)
+  if (!('audioMessage' in SM.prototype)) SM.prototype.audioMessage = null;
+  if (!('audioMessage' in SM.prototype)) return false;
 
-  const original = proto.Message.encode;
-
-  const parcheado = function encode(message, writer, ...resto) {
-    const envoltorio = message?.[MARCA_SOUND_STICKER];
-    if (!envoltorio) return original.call(proto.Message, message, writer, ...resto);
-
-    // `stickerMessage` se deja en el objeto: Baileys lo usa para marcar
-    // mediatype="sticker" en la estanza, pero no debe emitirse como campo 26.
-    const { stickerMessage: _soloParaBaileys, ...restoMsg } = message;
-
-    const salida = original.call(proto.Message, restoMsg, writer, ...resto);
-    if (!salida || typeof salida.uint32 !== 'function') {
-      // Sin writer: no podemos añadir bytes, devolvemos tal cual
+  // 2. encode: escribir el campo 26 (26<<3|2 = 210)
+  if (!SM.__encodeParcheado) {
+    const encodeOriginal = SM.encode;
+    SM.encode = function encode(m, w) {
+      const salida = encodeOriginal.call(SM, m, w);
+      if (salida && typeof salida.uint32 === 'function' && m?.audioMessage != null) {
+        salida.uint32(210);
+        salida.bytes(proto.Message.AudioMessage.encode(m.audioMessage).finish());
+      }
       return salida;
-    }
+    };
+    SM.__encodeParcheado = true;
+  }
 
-    // Campo 134 (1074 = 134<<3 | 2), tipo length-delimited
-    salida.uint32(1074);
-    salida.bytes(envoltorio);
-    return salida;
-  };
-
-  proto.Message.encode = parcheado;
   encodeInstalado = true;
   return true;
 }
 
-/** Devuelve true si el encode en memoria ya está activo */
-export function encodeEnMemoriaActivo() {
-  return encodeInstalado;
+/** Comprueba que el campo se conserva al serializar */
+export function camposStickerSoportados(proto) {
+  try {
+    const SM = proto?.Message?.StickerMessage;
+    if (!SM || !('audioMessage' in SM.prototype)) return false;
+
+    // Asignación directa: es como lo hace el envío real (fromObject solo copia
+    // los campos que conoce de antemano)
+    const prueba = SM.fromObject({ mimetype: 'image/webp' });
+    prueba.audioMessage = proto.Message.AudioMessage.fromObject({ seconds: 3 });
+    const bytes = SM.encode(prueba).finish();
+
+    // 26 << 3 | 2 = 210 = 0xD2, y el campo 26 de AudioMessage.seconds
+    return bytes.toString('hex').includes('d201');
+  } catch {
+    return false;
+  }
 }
 
 // Uso directo: node proto/aplicar-proto.js [--restaurar]
