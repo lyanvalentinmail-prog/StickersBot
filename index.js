@@ -13,8 +13,9 @@ import { s2 } from './commands/s2.js';
 const SESSION = './session';
 const P = config.prefijo;
 
-// Activa el soporte de stickers con audio (parchea el proto de Baileys).
-// Debe ejecutarse ANTES de importar nada que use el proto en caliente.
+// Activa el soporte de stickers con audio.
+// El parche en disco ayuda en el siguiente arranque (y en postinstall), pero el
+// que manda es el de memoria: Baileys ya está cargado a estas alturas.
 const proto = asegurarProto();
 
 if (!fs.existsSync(SESSION)) fs.mkdirSync(SESSION, { recursive: true });
@@ -187,8 +188,11 @@ async function main() {
   console.log(chalk.magentaBright.bold(`   ${config.botNombre} v${config.botVersion}`));
   console.log(chalk.cyanBright.bold('══════════════════════════════════\n'));
 
-  if (proto.ok) {
-    console.log(chalk.gray('🔊 Stickers con audio: activados'));
+  const { soportaStickerConAudio } = await import('./lib/soundsticker.js');
+  const soundSticker = await soportaStickerConAudio();
+
+  if (soundSticker) {
+    console.log(chalk.gray('🔊 Stickers con audio: activados (un solo mensaje)'));
   } else {
     console.log(chalk.yellow(`⚠️  Stickers con audio no disponibles (${proto.motivo || 'proto sin parchear'})`));
     console.log(chalk.gray('   Se enviará el sticker y el audio por separado.'));

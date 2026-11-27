@@ -257,6 +257,76 @@ export function restaurarProto() {
   return false;
 }
 
+// ── Extensión del proto EN MEMORIA ─────────────────────────────────
+//
+// Si el bot ya cargó `@whiskeysockets/baileys`, parchear WAProto/index.js en
+// disco NO surte efecto: el módulo está en caché y su `Message.encode` sigue
+// siendo el original. Como los sitios donde se codifica el mensaje final
+// (`getMessageType` / estanza) solo leen `message.stickerMessage` y las
+// propiedades desconocidas se ignoran, basta con:
+//
+//   · añadir los prototipos para que `fromObject`/`toObject` conserven los campos
+//   · envolver `Message.encode` para escribir el campo 134 en los mensajes
+//     marcados
+
+export const MARCA_SOUND_STICKER = Symbol.for('stickersbot.soundsticker');
+
+let encodeInstalado = false;
+
+/**
+ * Envuelve en memoria `Message.encode` para que los mensajes marcados con
+ * MARCA_SOUND_STICKER se serialicen como el sound sticker real:
+ *
+ *   Message.134 (FutureProofMessage) → Message.1 → stickerMessage(.26 audio)
+ */
+export function instalarEncodeEnMemoria(proto) {
+  if (encodeInstalado) return true;
+  if (!proto?.Message?.encode) return false;
+
+  // Propiedades que necesita el envoltorio (desconocidas para el proto original)
+  for (const nombre of ['audioStickerMessage']) {
+    if (!(nombre in proto.Message.prototype)) proto.Message.prototype[nombre] = null;
+    if (!(nombre in proto.Message.prototype)) return false;
+    if (!(`_${nombre}` in proto.Message.prototype)) proto.Message.prototype[`_${nombre}`] = null;
+  }
+  for (const nombre of ['audioMessage', 'streamingSidecar']) {
+    if (!(nombre in proto.Message.prototype)) proto.Message.prototype[nombre] = null;
+    if (!(nombre in proto.Message.prototype)) return false;
+    if (!(`_${nombre}` in proto.Message.prototype)) proto.Message.prototype[`_${nombre}`] = null;
+  }
+
+  const original = proto.Message.encode;
+
+  const parcheado = function encode(message, writer, ...resto) {
+    const envoltorio = message?.[MARCA_SOUND_STICKER];
+    if (!envoltorio) return original.call(proto.Message, message, writer, ...resto);
+
+    // `stickerMessage` se deja en el objeto: Baileys lo usa para marcar
+    // mediatype="sticker" en la estanza, pero no debe emitirse como campo 26.
+    const { stickerMessage: _soloParaBaileys, ...restoMsg } = message;
+
+    const salida = original.call(proto.Message, restoMsg, writer, ...resto);
+    if (!salida || typeof salida.uint32 !== 'function') {
+      // Sin writer: no podemos añadir bytes, devolvemos tal cual
+      return salida;
+    }
+
+    // Campo 134 (1074 = 134<<3 | 2), tipo length-delimited
+    salida.uint32(1074);
+    salida.bytes(envoltorio);
+    return salida;
+  };
+
+  proto.Message.encode = parcheado;
+  encodeInstalado = true;
+  return true;
+}
+
+/** Devuelve true si el encode en memoria ya está activo */
+export function encodeEnMemoriaActivo() {
+  return encodeInstalado;
+}
+
 // Uso directo: node proto/aplicar-proto.js [--restaurar]
 if (process.argv[1] && path.basename(process.argv[1]) === 'aplicar-proto.js') {
   if (process.argv.includes('--restaurar')) {
