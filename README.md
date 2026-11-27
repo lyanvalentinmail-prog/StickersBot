@@ -134,6 +134,12 @@ Dos detalles hacen que WhatsApp reproduzca el sonido:
    cada bloque de 64 KiB del archivo cifrado, encadenado con los 16 bytes
    anteriores (el IV en el primer bloque).
 
+> **Importante:** parchear `WAProto/index.js` en disco **no basta** si Baileys ya
+> está cargado: el proto vive en memoria y seguiría siendo el original. Por eso el
+> bot envuelve también `proto.Message.encode` en memoria
+> (`instalarEncodeEnMemoria`) y marca el mensaje ya construido con un `Symbol`,
+> que se ignora al serializar el resto de mensajes.
+
 El formato está contrastado con tres implementaciones en producción:
 [coelhobugado/whatsapp-figurinhas-com-som](https://github.com/coelhobugado/whatsapp-figurinhas-com-som),
 [raditted/whatsapp-sound-sticker](https://github.com/raditted/whatsapp-sound-sticker)
