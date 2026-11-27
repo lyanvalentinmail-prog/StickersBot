@@ -1,0 +1,21 @@
+{
+  "name": "stickersbot",
+  "version": "2.0.0",
+  "description": "Bot de WhatsApp para crear stickers con audio (.s2) — Termux",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "qr": "node index.js --qr",
+    "pair": "node index.js --pair"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.0",
+    "chalk": "^5.3.0",
+    "pino": "^9.5.0",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
