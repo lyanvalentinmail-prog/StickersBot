@@ -134,6 +134,19 @@ Dos detalles hacen que WhatsApp reproduzca el sonido:
    cada bloque de 64 KiB del archivo cifrado, encadenado con los 16 bytes
    anteriores (el IV en el primer bloque).
 
+### Que la burbuja no salga vacía
+
+WhatsApp pinta la burbuja del sticker con la **miniatura** y con el **primer
+fotograma**. Un sound sticker envuelto en `FutureProofMessage` no tiene la
+miniatura que Baileys genera para los stickers normales, así que el bot:
+
+- genera un `pngThumbnail` de 96×96 y lo adjunta al mensaje;
+- **no aplica fade-in**: el primer fotograma debe verse, porque es lo que
+  WhatsApp muestra antes de animar;
+- envía `width`, `height`, `isAnimated` y `mimetype` explícitos;
+- mueve la cita (`contextInfo`) fuera del sticker: dentro del envoltorio no se
+  resuelve y deja la burbuja vacía.
+
 > **Importante:** parchear `WAProto/index.js` en disco **no basta** si Baileys ya
 > está cargado: el proto vive en memoria y seguiría siendo el original. Por eso el
 > bot envuelve también `proto.Message.encode` en memoria
