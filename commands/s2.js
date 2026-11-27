@@ -2,7 +2,7 @@
 import fs from 'fs';
 import config from '../config.js';
 import {
-  crearSticker, extraerAudio, addExif, detectarTipo, cleanup, probe,
+  crearSticker, extraerAudio, addExif, detectarTipo, cleanup, probe, crearMiniatura,
 } from '../lib/sticker.js';
 import {
   descargarDelMensaje, descargarTikTok, descargar, esEnlace, esTikTok,
@@ -81,6 +81,9 @@ export async function s2(sock, msg, args = []) {
 
     const webp = addExif(sticker.buffer, config.packname, config.author);
 
+    // ── Miniatura para la burbuja del chat ──────────────────
+    const miniatura = await crearMiniatura(archivo);
+
     // ── Audio para embeber en el sticker ────────────────────
     let audio = null;
     let segundos = 0;
@@ -106,7 +109,7 @@ export async function s2(sock, msg, args = []) {
     if (soportado) {
       await enviarStickerConAudio(
         sock, jid,
-        { webp, audio, segundos },
+        { webp, audio, segundos, animado: tipo === 'video', miniatura },
         { quoted: msg }
       );
     } else {
