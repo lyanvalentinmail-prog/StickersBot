@@ -114,25 +114,32 @@ Para cambiar el nombre/autor del sticker edita `packname` y `author`.
 
 ## 🔊 Cómo funciona el sticker con audio
 
-WhatsApp añadió en noviembre de 2026 los *sound stickers*. No es un sticker
-normal: viaja en un envoltorio `FutureProofMessage` y el audio va anidado dentro
-del propio `StickerMessage`:
+WhatsApp añadió en noviembre de 2026 los *sound stickers*: un **StickerMessage
+normal** que lleva un `AudioMessage` anidado en el campo 26 (`oneof audio`).
 
 ```
 Message
- └─ 134 audioStickerMessage (FutureProofMessage)
-      └─ 1 Message
-           └─ 26 StickerMessage (WebP animado 512×512)
-                └─ 26 StickerMessage.audioMessage (Ogg/Opus + streamingSidecar)
+ └─ 26 stickerMessage (WebP 512×512 + miniatura + EXIF)
+      └─ 26 StickerMessage.audioMessage (Ogg/Opus + streamingSidecar)
 ```
 
 Dos detalles hacen que WhatsApp reproduzca el sonido:
 
-1. **El envoltorio del campo 134** — un sticker suelto con audio dentro no se
-   reconoce como sound sticker.
+1. **El campo 26 dentro del `StickerMessage`** — sin él llega un sticker mudo.
 2. **El `streamingSidecar` del audio** — un HMAC-SHA256 truncado a 10 bytes por
    cada bloque de 64 KiB del archivo cifrado, encadenado con los 16 bytes
    anteriores (el IV en el primer bloque).
+
+> ⚠️ **No envolver el sticker en `Message.audioStickerMessage` (campo 134).**
+> Algunos experimentos usan ese sobre `FutureProofMessage`, pero si el cliente
+> no lo resuelve el mensaje llega como un sobre desconocido y **la burbuja sale
+> vacía, sin imagen ni información**. El camino que funciona es el sticker
+> normal con el audio dentro.
+
+El campo 26 no existe en el proto de Baileys 7.0.0-rc14, así que
+`proto/aplicar-proto.js` lo añade al arrancar, tanto en el archivo como
+**en memoria** (Baileys ya está cargado a esas alturas y su `Message.encode`
+seguiría siendo el original).
 
 ### Que la burbuja no salga vacía
 
@@ -148,10 +155,8 @@ miniatura que Baileys genera para los stickers normales, así que el bot:
   resuelve y deja la burbuja vacía.
 
 > **Importante:** parchear `WAProto/index.js` en disco **no basta** si Baileys ya
-> está cargado: el proto vive en memoria y seguiría siendo el original. Por eso el
-> bot envuelve también `proto.Message.encode` en memoria
-> (`instalarEncodeEnMemoria`) y marca el mensaje ya construido con un `Symbol`,
-> que se ignora al serializar el resto de mensajes.
+> está cargado: el proto vive en memoria. `instalarEncodeEnMemoria()` añade el
+> campo a la clase `StickerMessage` ya cacheada.
 
 El formato está contrastado con tres implementaciones en producción:
 [coelhobugado/whatsapp-figurinhas-com-som](https://github.com/coelhobugado/whatsapp-figurinhas-com-som),
